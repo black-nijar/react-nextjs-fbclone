@@ -4,6 +4,7 @@ import Header from "../components/Header";
 import Login from "../components/Login";
 import Feed from "../components/Feed";
 import SideBar from "../components/SideBar";
+import Posts from "../components/Posts";
 
 export default function Home({ session }) {
   if (!session) return <Login />;

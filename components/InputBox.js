@@ -1,15 +1,72 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import Image from "next/image";
 import { useSession } from "next-auth/client";
 import { CameraIcon, VideoCameraIcon } from "@heroicons/react/solid";
 import { EmojiHappyIcon } from "@heroicons/react/outline";
+import { db, storage } from "../firebase";
+import firebase from "firebase";
 
 const InputBox = () => {
   const [session, loading] = useSession();
   const inputRef = useRef(null);
+  const fileRef = useRef(null);
+  const [file, setFile] = useState(null);
 
   const sendPost = (e) => {
     e.preventDefault();
+    if (!inputRef.current.value) return;
+
+    db.collection("posts")
+      .add({
+        name: session.user.name,
+        image: session.user.image,
+        email: session.user.email,
+        post: inputRef.current.value,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      })
+      .then(async (doc) => {
+        if (file) {
+          const upload = storage
+            .ref(`posts/${doc.id}`)
+            .putString(file, "data_url");
+          onRemoveImage();
+          await upload.on(
+            "state_change",
+            null,
+            (error) => console.log("image err", error),
+            () => {
+              storage
+                .ref("posts")
+                .child(doc.id)
+                .getDownloadURL()
+                .then((url) => {
+                  db.collection("posts").doc(doc.id).set(
+                    {
+                      postImage: url,
+                    },
+                    { merge: true }
+                  );
+                });
+            }
+          );
+        }
+      });
+    inputRef.current.value = "";
+  };
+
+  const addImagetoPost = (e) => {
+    const reader = new FileReader();
+    if (e.target.files[0]) {
+      reader.readAsDataURL(e.target.files[0]);
+    }
+
+    reader.onload = (readerEvent) => {
+      setFile(readerEvent.target.result);
+    };
+  };
+
+  const onRemoveImage = () => {
+    setFile(null);
   };
   return (
     <div
@@ -35,15 +92,25 @@ const InputBox = () => {
             Submit
           </button>
         </form>
+        {file && (
+          <div
+            onClick={onRemoveImage}
+            className="flex flex-col filter hover:brightness-110 transition 
+                duration-150 transform hover:scale-105 cursor-pointer"
+          >
+            <img src={file} alt="" className="h-8 object-contain" />
+          </div>
+        )}
       </div>
       <div className="flex justify-evenly p-3 border-t">
         <div className="inputIcon">
           <VideoCameraIcon className="h-7 text-red-500" />
           <p className="text-xs sm:text-sm xl:text-base">Live Video</p>
         </div>
-        <div className="inputIcon">
+        <div className="inputIcon" onClick={() => fileRef.current.click()}>
           <CameraIcon className="h-7 text-green-400 " />
           <p className="text-xs sm:text-sm xl:text-base">Photo/Video</p>
+          <input onChange={addImagetoPost} type="file" hidden ref={fileRef} />
         </div>
         <div className="inputIcon">
           <EmojiHappyIcon className="h-7 text-yellow-300" />
